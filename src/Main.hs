@@ -11,6 +11,9 @@ import Text.XML.HXT.Expat (withExpat)
 import qualified Text.XML.HXT.DOM.XmlNode as XN
 import Data.Maybe (fromJust)
 
+findMatching args = filter (\x -> (justOrEmpty $ XN.getQualifiedName x) == (head args))
+
+
 main = do
 	args <- getArgs
 	let src = head args
@@ -23,24 +26,39 @@ main = do
   		src
       	-- >>> getChildren >>> isElem
 
-	forM_ rootElems $ printElem ""
+	loop [rootElems]
+
+	where loop elems = do
+		forM_ (zip elems [1..]) $ \(name,index) -> putStrLn $ (justOrEmpty . XN.getQualifiedName $ name) ++ " " ++ (show index)
+		cmdline <- readLn
+		let (cmd:args) = words cmdline
+		case cmd of
+			--"cd" -> loop . getChildren . head . findMatching args $ elems
+			_    -> return ()
+
+
 
 
 printElem tab el@(XN.NTree _ children) = do
+	when (XN.isElem el) (printActualElem tab el) 
+
+
+printActualElem tab el@(XN.NTree _ children) = do
 	let name = XN.getQualifiedName el
-	case name of
-		Nothing -> putStr $ tab ++ "<"
-		Just theName -> putStr $ tab ++ "<" ++ theName
+	putStr $ tab ++ "<" ++ (justOrEmpty name)
 	let attrVals = getAttrVals el
 	forM_ attrVals $ \x -> putStrLn $ tab ++ "    " ++ (fst x) ++ "=\"" ++ (snd x) ++ "\""
 	putStrLn $ (if (null attrVals) then "" else tab) ++ ">\n"
-	forM_ (filter XN.isElem children) $ printElem (tab ++ "    ")
-	putStrLn $ tab ++ "</" ++ (fromJust name) ++ ">"
+	forM_ children $ printElem (tab ++ "    ")
+	putStrLn $ tab ++ "</" ++ (justOrEmpty name) ++ ">"
 
 --getName node@(NTree (XTag qName _) children) = 
 --commandLoop :: ArrowXml cat => cat (NTree XNode) XmlTree
 --commandLoop =
 --	getChildren >>> isElem
+
+justOrEmpty Nothing = ""
+justOrEmpty (Just x) = x
 
 getAttrVals :: XmlTree -> [(String, String)]
 getAttrVals = runLA (getAttrl >>> getName &&& (getChildren >>> getText))
