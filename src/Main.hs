@@ -10,7 +10,8 @@ import Text.XML.HXT.Core (readDocument, getChildren, getText, XmlTree, getName, 
 import Text.XML.HXT.Curl -- use libcurl for HTTP access, only necessary when reading http://...
 import Text.XML.HXT.Expat (withExpat)
 import qualified Text.XML.HXT.DOM.XmlNode as XN
---import Data.Maybe (fromJust)
+import Text.XML.HXT.DOM.ShowXml (xshow)
+import Data.Maybe (isJust, fromJust)
 --import Debug.Trace (trace)
 
 --trace2 x = trace (show x) x
@@ -20,9 +21,9 @@ data Context = Context { getCurrentNode :: XmlTree
                        }
              | Root
 
-getContextName Root = ""
-getContextName ctx = basePath ++ (justOrEmpty . XN.getQualifiedName . getCurrentNode $ ctx)
-    where basePath = case (getContextName . getParentContext $ ctx) of 
+getContextPath Root = ""
+getContextPath ctx = basePath ++ (justOrEmpty . XN.getQualifiedName . getCurrentNode $ ctx)
+    where basePath = case (getContextPath . getParentContext $ ctx) of 
                         "" -> ""
                         "/" -> "/"
                         path -> path ++ "/"
@@ -54,7 +55,7 @@ loop ctx = do
     let elem = getCurrentNode ctx
         parentCtx = getParentContext ctx
         elems = XN.getChildren elem
-    putStr . getContextName $ ctx
+    putStr . getContextPath $ ctx
     cmdline <- prompt "$ "
     when (length cmdline == 0) $ loop ctx
 
@@ -65,6 +66,9 @@ loop ctx = do
             printElemChildren elems
             loop ctx
         "cd" -> commandCD ctx elems args
+        "cat" -> do
+            commandCAT ctx elems args
+            loop ctx
         _    -> loop ctx
 
 commandCD :: Context -> [XmlTree] -> [String] -> IO ()
@@ -73,12 +77,14 @@ commandCD ctx elems args = case head args of
     ".." -> case getParentContext ctx of
                 Root -> loop ctx
                 parentCtx -> loop parentCtx
-    _ -> case findChild args elems of
+    _ -> case findChild (head args) elems of
             Nothing -> loop ctx
             Just child -> loop (Context child ctx)
 
-findChild :: [String] -> [XmlTree] -> Maybe XmlTree
-findChild cdArgs elems = find (const True) . findMatching (head cdArgs) $ elems
+commandCAT ctx elems args = putStrLn . xshow $ (map fromJust . filter isJust . map (\name -> findChild name elems) $ args)
+    
+findChild :: String -> [XmlTree] -> Maybe XmlTree
+findChild name elems = find (const True) . findMatching name $ elems
 
 --printElemChildren :: [XmlTree] -> IO ()
 printElemChildren :: XN.XmlNode a => [a] -> IO ()
